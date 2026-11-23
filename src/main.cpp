@@ -105,7 +105,7 @@ CCNode* createRodSelectorButtonSprite(int selection) {
         return nullptr;
     }
 
-    constexpr float backgroundScale = 0.29f;
+    constexpr float backgroundScale = 0.87f;
     background->setScale(backgroundScale);
     auto const size = CCSize{
         background->getContentSize().width * backgroundScale,
@@ -124,7 +124,7 @@ CCNode* createRodSelectorButtonSprite(int selection) {
         auto const stemFrame = fmt::format("rod_0{}_001.png", selection);
         auto* stem = CCSprite::createWithSpriteFrameName(stemFrame.c_str());
         if (stem) {
-            stem->setScale(0.12f);
+            stem->setScale(0.36f);
             stem->setAnchorPoint({ 0.5f, 1.f });
             stem->setPosition({ size.width / 2.f, size.height * 0.39f });
             container->addChild(stem, 1);
@@ -134,7 +134,7 @@ CCNode* createRodSelectorButtonSprite(int selection) {
 
         auto* ball = CCSprite::createWithSpriteFrameName(ROD_BALL_FRAME_NAMES[selection - 1]);
         if (ball) {
-            ball->setScale(0.28f);
+            ball->setScale(0.84f);
             ball->setPosition({ size.width / 2.f, size.height * 0.69f });
             container->addChild(ball, 2);
         } else {
@@ -179,17 +179,19 @@ void addRodSelectorButton(
     if (!menu) return;
     menu->setID("rod-ball-selector-menu"_spr);
     // Shift left to leave a clear gap before the Cube control at the right edge.
-    menu->setPosition({ winSize.width - 148.f, winSize.height - 35.f });
+    menu->setPosition({ winSize.width - 250.f, winSize.height - 100.f });
     layer->addChild(menu, 10000);
 }
 
 class RodBallPopup : public geode::Popup {
 protected:
     std::vector<std::string> m_storageKeys;
+    CCNode* m_levelLayer = nullptr;
 
-    bool init(std::vector<std::string> const& storageKeys) {
+    bool init(std::vector<std::string> const& storageKeys, CCNode* levelLayer) {
         if (!geode::Popup::init(350.f, 190.f)) return false;
         m_storageKeys = storageKeys;
+        m_levelLayer = levelLayer;
 
         setTitle("Choose Rod Ball");
         if (m_title) {
@@ -241,9 +243,9 @@ protected:
     }
 
 public:
-    static RodBallPopup* create(std::vector<std::string> const& storageKeys) {
+    static RodBallPopup* create(std::vector<std::string> const& storageKeys, CCNode* levelLayer) {
         auto* ret = new RodBallPopup();
-        if (ret->init(storageKeys)) {
+        if (ret->init(storageKeys, levelLayer)) {
             ret->autorelease();
             return ret;
         }
@@ -258,6 +260,19 @@ public:
 
         for (auto const& key : m_storageKeys) {
             Mod::get()->setSavedValue<int>(key, selection);
+        }
+
+        // Refresh the level-page button immediately after saving the choice.
+        // Normal gameplay uses the vanilla Rod, but the button preview falls back to Rod 3.
+        if (m_levelLayer) {
+            auto* menu = m_levelLayer->getChildByID("rod-ball-selector-menu"_spr);
+            auto* buttonNode = menu ? menu->getChildByID("rod-ball-selector-open-button"_spr) : nullptr;
+            auto* button = typeinfo_cast<CCMenuItemSpriteExtra*>(buttonNode);
+            auto* preview = createRodSelectorButtonSprite(selection == 0 ? 3 : selection);
+            if (button && preview) {
+                button->setNormalImage(preview);
+                button->updateSprite();
+            }
         }
 
         Notification::create(
@@ -281,7 +296,7 @@ class $modify(RodBallLevelInfo, LevelInfoLayer) {
     }
 
     void onOpenRodBallPopup(CCObject*) {
-        auto* popup = RodBallPopup::create(levelStorageKeys(m_level));
+        auto* popup = RodBallPopup::create(levelStorageKeys(m_level), this);
         if (popup) popup->show();
     }
 };
@@ -298,7 +313,7 @@ class $modify(RodBallLevelPage, LevelPage) {
     }
 
     void onOpenRodBallPopup(CCObject*) {
-        auto* popup = RodBallPopup::create(levelStorageKeys(m_level));
+        auto* popup = RodBallPopup::create(levelStorageKeys(m_level), this);
         if (popup) popup->show();
     }
 };
