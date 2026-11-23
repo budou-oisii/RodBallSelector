@@ -5,9 +5,14 @@
     },
     "id": "yrc.rod-ball-selector",
     "name": "Rod Ball Selector",
-    "version": "v1.0.0",
+    "version": "1.0.0",
     "developer": "Yukkuri RythmCraft",
     "description": "Choose Normal or one of three Rod Ball variants for each level.",
+    "links": {
+        "community": "https://discord.gg/Bkgxed6A37",
+        "homepage": "https://grapes.click",
+        "source": "https://github.com/budou-oisii/RodBallSelector"
+    },
     "tags": [
         "gameplay",
         "customization",
