@@ -26,7 +26,18 @@
             "resources/rod_ball_01_001.png",
             "resources/rod_ball_02_001.png",
             "resources/rod_ball_03_001.png",
-            "resources/GJ_plainBtn_001.png"
+            "resources/GJ_plainBtn_001.png",
+            "changelog.md"
         ]
+    },
+    "settings": {
+        "reset-all-levels": {
+            "type": "button",
+            "name": "Reset All Level Selections",
+            "description": "Set every saved level Rod selection back to Normal. A confirmation will be shown before resetting.",
+            "buttons": {
+                "reset-to-normal": "Reset All to Normal"
+            }
+        }
     }
 }

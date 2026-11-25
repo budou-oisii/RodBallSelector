@@ -1,11 +1,16 @@
 # Changelog
 
-All notable changes to Rod Ball Selector are documented here.
-
-## [1.0.0] - Initial Release
+## 1.0.0
 
 ### Added
-- Added the Rod Ball selector with Normal, Rod 1, Rod 2, and Rod 3 options.
-- Added per-level selection saving.
-- Added a selector button with a preview of the selected Rod.
-- Added support for official levels and user-created levels.
+- Initial release of Rod Ball Selector.
+- Select Normal, Rod 1, Rod 2, or Rod 3 for each level.
+- Added a level selector button with a Rod preview.
+- Added a native Geode Settings button to reset all saved level selections to Normal, with confirmation.
+
+### Improved
+- Enlarged the level selector button and its clickable area.
+
+### Fixed
+- Fixed the Settings reset button registration by using Geode's built-in button setting type.
+- Increased the selector button itself and its clickable area to 3.5 times the previous size.

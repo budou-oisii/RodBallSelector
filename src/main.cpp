@@ -11,9 +11,13 @@
 #include <Geode/modify/CCSprite.hpp>
 #include <Geode/modify/IDManager.hpp>
 #include <Geode/ui/Popup.hpp>
+#include <Geode/loader/SettingV3.hpp>
+#include <Geode/binding/ButtonSprite.hpp>
 #include <Geode/utils/cocos.hpp>
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <cstdint>
 #include <string>
@@ -105,7 +109,10 @@ CCNode* createRodSelectorButtonSprite(int selection) {
         return nullptr;
     }
 
-    constexpr float backgroundScale = 0.87f;
+    // Enlarge the actual sprite and its container instead of scaling only the
+    // menu item. CCMenuItemSpriteExtra then receives the full enlarged content
+    // size, so both the visible button and its touch target are 3.5x larger.
+    constexpr float backgroundScale = 1.015f; // 0.29f * 3.5f
     background->setScale(backgroundScale);
     auto const size = CCSize{
         background->getContentSize().width * backgroundScale,
@@ -124,7 +131,7 @@ CCNode* createRodSelectorButtonSprite(int selection) {
         auto const stemFrame = fmt::format("rod_0{}_001.png", selection);
         auto* stem = CCSprite::createWithSpriteFrameName(stemFrame.c_str());
         if (stem) {
-            stem->setScale(0.36f);
+            stem->setScale(0.42f);
             stem->setAnchorPoint({ 0.5f, 1.f });
             stem->setPosition({ size.width / 2.f, size.height * 0.39f });
             container->addChild(stem, 1);
@@ -134,7 +141,7 @@ CCNode* createRodSelectorButtonSprite(int selection) {
 
         auto* ball = CCSprite::createWithSpriteFrameName(ROD_BALL_FRAME_NAMES[selection - 1]);
         if (ball) {
-            ball->setScale(0.84f);
+            ball->setScale(0.98f);
             ball->setPosition({ size.width / 2.f, size.height * 0.69f });
             container->addChild(ball, 2);
         } else {
@@ -165,7 +172,6 @@ void addRodSelectorButton(
 ) {
     if (!layer || layer->getChildByID("rod-ball-selector-menu"_spr)) return;
 
-    auto const winSize = CCDirector::sharedDirector()->getWinSize();
     auto* buttonSprite = createRodSelectorButtonSprite(
         rodBallForButton(levelStorageKeys(level))
     );
@@ -175,11 +181,69 @@ void addRodSelectorButton(
     if (!button) return;
     button->setID("rod-ball-selector-open-button"_spr);
 
+    // Give the menu an explicit, centered hit area matching the enlarged button.
     auto* menu = CCMenu::createWithItem(button);
     if (!menu) return;
     menu->setID("rod-ball-selector-menu"_spr);
-    // Shift left to leave a clear gap before the Cube control at the right edge.
-    menu->setPosition({ winSize.width - 250.f, winSize.height - 100.f });
+    auto const buttonSize = button->getScaledContentSize();
+    menu->setContentSize(buttonSize);
+    menu->setAnchorPoint({ 0.5f, 0.5f });
+    button->setPosition({ buttonSize.width / 2.f, buttonSize.height / 2.f });
+
+    auto const winSize = CCDirector::sharedDirector()->getWinSize();
+    CCPoint selectorPosition = {
+        winSize.width * 0.70f,
+        winSize.height * 0.82f
+    };
+
+    // LevelInfoLayer's Node IDs expose the Cube/profile control as:
+    // layer -> "garage-menu" -> "garage-button".
+    // Use the actual button's world position and dimensions instead of a
+    // guessed screen percentage, which caused the enlarged selector to
+    // overlap the Cube and extend beyond the top edge.
+    auto* cubeMenu = layer->getChildByID("garage-menu");
+    auto* cubeButton = cubeMenu ? cubeMenu->getChildByID("garage-button") : nullptr;
+    if (cubeButton && cubeButton->getParent()) {
+        auto const cubeWorldPosition = cubeButton->getParent()->convertToWorldSpace(
+            cubeButton->getPosition()
+        );
+        auto const cubePosition = layer->convertToNodeSpace(cubeWorldPosition);
+        auto const cubeSize = cubeButton->getScaledContentSize();
+        auto const selectorSize = button->getScaledContentSize();
+        constexpr float gap = 12.f;
+        constexpr float edgeMargin = 12.f;
+
+        selectorPosition.x = cubePosition.x - cubeSize.width / 2.f
+            - selectorSize.width / 2.f - gap;
+
+        // Keep the larger selector completely visible. The Cube is close to
+        // the top edge, so the selector center must be lowered when necessary.
+        float const halfHeight = selectorSize.height / 2.f;
+        selectorPosition.y = std::clamp(
+            cubePosition.y,
+            halfHeight + edgeMargin,
+            winSize.height - halfHeight - edgeMargin
+        );
+
+        log::info(
+            "Rod Ball Selector anchored left of Cube: cube=({:.1f}, {:.1f}), selector=({:.1f}, {:.1f}), size=({:.1f}, {:.1f})",
+            cubePosition.x, cubePosition.y,
+            selectorPosition.x, selectorPosition.y,
+            selectorSize.width, selectorSize.height
+        );
+    } else {
+        // LevelPage does not expose the same garage-menu node. Use a safe
+        // in-bounds fallback there, and report the missing anchor clearly.
+        log::warn("Rod Ball Selector could not find LevelInfoLayer Node ID 'garage-menu/garage-button'; using safe fallback position");
+        float const halfHeight = button->getScaledContentSize().height / 2.f;
+        selectorPosition.y = std::clamp(
+            selectorPosition.y,
+            halfHeight + 12.f,
+            winSize.height - halfHeight - 12.f
+        );
+    }
+
+    menu->setPosition(selectorPosition);
     layer->addChild(menu, 10000);
 }
 
@@ -283,7 +347,62 @@ public:
     }
 };
 
+
+size_t resetAllLevelSelectionsToNormal() {
+    auto* mod = Mod::get();
+    auto& saveContainer = mod->getSaveContainer();
+    std::vector<std::string> levelKeys;
+
+    if (saveContainer.isObject()) {
+        for (auto const& [key, value] : saveContainer) {
+            bool const isLevelKey =
+                key == "rod-ball-level-unknown" ||
+                key.starts_with("rod-ball-level-id-") ||
+                key.starts_with("rod-ball-local-") ||
+                key.starts_with("rod-ball-content-");
+            if (isLevelKey) levelKeys.push_back(key);
+        }
+    }
+
+    // Store an explicit Normal selection (0) for every known level. Do not
+    // touch unrelated settings or saved values belonging to other features.
+    for (auto const& key : levelKeys) {
+        mod->setSavedValue<int>(key, DEFAULT_ROD_BALL);
+    }
+
+    auto saveResult = mod->saveData();
+    if (!saveResult) {
+        log::warn("Failed to immediately save reset Rod selections: {}", saveResult.unwrapErr());
+    }
+    return levelKeys.size();
+}
+
 } // namespace
+
+// Geode's built-in button setting raises this event when the Settings button is pressed.
+// Using the native button type avoids an unresolved custom-setting entry in the mod page.
+$on_mod(Loaded) {
+    ButtonSettingPressedEventV3(Mod::get(), "reset-all-levels").listen([](auto buttonKey) {
+        if (buttonKey != "reset-to-normal") return;
+
+        createQuickPopup(
+            "Reset all Rod selections?",
+            "This will set every saved level's Rod selection to <cy>Normal</c>. "
+            "This action cannot be undone.",
+            "Cancel",
+            "Reset",
+            [](auto, bool confirmed) {
+                if (!confirmed) return;
+
+                size_t const resetCount = resetAllLevelSelectionsToNormal();
+                Notification::create(
+                    fmt::format("Reset {} level selection(s) to Normal", resetCount),
+                    NotificationIcon::Success
+                )->show();
+            }
+        );
+    }).leak();
+}
 
 // Online and locally saved user levels use LevelInfoLayer.
 class $modify(RodBallLevelInfo, LevelInfoLayer) {
